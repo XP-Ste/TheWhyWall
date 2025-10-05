@@ -5,60 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Why Wall</title>
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f3f4f6;
-      color: #222;
-      text-align: center;
-      padding: 2rem;
-    }
-    h1 {
-      font-size: 2rem;
-      color: #111;
-      margin-bottom: 1rem;
-    }
-    input {
-      padding: 0.6rem;
-      width: 60%;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      margin-right: 0.5rem;
-    }
-    button {
-      padding: 0.6rem 1rem;
-      background-color: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #1d4ed8;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-      margin-top: 2rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-    }
-    li {
-      background: white;
-      padding: 1rem;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      width: 80%;
-      max-width: 500px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .question {
-      flex-grow: 1;
-      text-align: left;
-    }
+    body { font-family: 'Segoe UI', sans-serif; background:#f3f4f6; color:#222; text-align:center; padding:2rem;}
+    h1 { font-size:2rem; margin-bottom:1rem;}
+    input { padding:0.6rem; width:60%; border:1px solid #ccc; border-radius:8px; margin-right:0.5rem;}
+    button { padding:0.6rem 1rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer;}
+    button:hover { background:#1d4ed8;}
+    ul { list-style:none; padding:0; margin-top:2rem; display:flex; flex-direction:column; align-items:center; gap:1rem;}
+    li { background:white; padding:1rem; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); width:80%; max-width:500px; display:flex; justify-content:space-between; align-items:center;}
+    .question { flex-grow:1; text-align:left; }
+    .vote-buttons { display:flex; gap:0.5rem; }
   </style>
 </head>
 <body>
@@ -69,12 +24,12 @@
   <ul id="questionList"></ul>
 
   <script type="module">
-    // Import dei moduli Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
-    import { getFirestore, collection, addDoc, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
-    // Configurazione del tuo progetto Firebase
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyBLhUTg-Dnl_x2yMkYB5i4mC94axYT_kVM",
       authDomain: "thewhywall-bd9a3.firebaseapp.com",
@@ -85,59 +40,82 @@
       measurementId: "G-T364DHHDC4"
     };
 
-    // Inizializza Firebase e Firestore
     const app = initializeApp(firebaseConfig);
     const analytics = getAnalytics(app);
     const db = getFirestore(app);
+    const auth = getAuth();
+    let currentUserId = null;
 
-    // Funzione per aggiungere una domanda
+    // Login anonimo
+    signInAnonymously(auth)
+      .then(userCredential => {
+        currentUserId = userCredential.user.uid;
+        loadQuestions();
+      })
+      .catch(console.error);
+
     async function addQuestion() {
       const questionText = document.getElementById("questionInput").value;
-      if (questionText.trim() === "") return;
+      if (!questionText.trim()) return;
 
-      await addDoc(collection(db, "questions"), {
-        text: questionText,
-        votes: 0
-      });
-
+      await addDoc(collection(db, "questions"), { text: questionText, votes: {} });
       document.getElementById("questionInput").value = "";
       loadQuestions();
     }
 
-    // Funzione per caricare le domande
     async function loadQuestions() {
       const list = document.getElementById("questionList");
       list.innerHTML = "";
 
       const querySnapshot = await getDocs(collection(db, "questions"));
       let questions = [];
-      querySnapshot.forEach((docu) => {
-        questions.push({ id: docu.id, ...docu.data() });
+      querySnapshot.forEach(docu => questions.push({ id: docu.id, ...docu.data() }));
+
+      // Calcola totale voti per ogni domanda
+      questions.forEach(q => {
+        q.totalVotes = 0;
+        for (const uid in q.votes) q.totalVotes += q.votes[uid];
       });
 
-      // Ordina per numero di voti
-      questions.sort((a, b) => b.votes - a.votes);
+      // Ordina per voti totali
+      questions.sort((a,b) => b.totalVotes - a.totalVotes);
 
-      // Mostra le domande
-      questions.forEach((q) => {
+      questions.forEach(q => {
         const li = document.createElement("li");
         li.innerHTML = `
           <span class="question">${q.text}</span>
-          <button onclick="vote('${q.id}', ${q.votes + 1})">👍 ${q.votes}</button>
+          <div class="vote-buttons">
+            <button onclick="upvote('${q.id}')">👍</button>
+            <span>${q.totalVotes}</span>
+            <button onclick="downvote('${q.id}')">👎</button>
+          </div>
         `;
         list.appendChild(li);
       });
     }
 
-    // Funzione per votare
-    window.vote = async function(id, newVotes) {
-      const ref = doc(db, "questions", id);
-      await updateDoc(ref, { votes: newVotes });
+    async function upvote(questionId) {
+      const ref = doc(db, "questions", questionId);
+      const docSnap = await getDoc(ref);
+      const data = docSnap.data();
+      const votes = data.votes || {};
+      if (votes[currentUserId] === 1) return;
+      votes[currentUserId] = 1;
+      await updateDoc(ref, { votes });
       loadQuestions();
     }
 
-    // Carica le domande all’avvio
-    loadQuestions();
+    async function downvote(questionId) {
+      const ref = doc(db, "questions", questionId);
+      const docSnap = await getDoc(ref);
+      const data = docSnap.data();
+      const votes = data.votes || {};
+      if (votes[currentUserId] === -1) return;
+      votes[currentUserId] = -1;
+      await updateDoc(ref, { votes });
+      loadQuestions();
+    }
+
   </script>
 </body>
 </html>

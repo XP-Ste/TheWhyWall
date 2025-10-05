@@ -1,121 +1,140 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Why Wall</title>
-  <style>
-    body { font-family: 'Segoe UI', sans-serif; background:#f3f4f6; color:#222; text-align:center; padding:2rem;}
-    h1 { font-size:2rem; margin-bottom:1rem;}
-    input { padding:0.6rem; width:60%; border:1px solid #ccc; border-radius:8px; margin-right:0.5rem;}
-    button { padding:0.6rem 1rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer;}
-    button:hover { background:#1d4ed8;}
-    ul { list-style:none; padding:0; margin-top:2rem; display:flex; flex-direction:column; align-items:center; gap:1rem;}
-    li { background:white; padding:1rem; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); width:80%; max-width:500px; display:flex; justify-content:space-between; align-items:center;}
-    .question { flex-grow:1; text-align:left; }
-    .vote-buttons { display:flex; gap:0.5rem; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Why Wall</title>
+<style>
+body { font-family: 'Segoe UI', sans-serif; background:#f3f4f6; color:#222; text-align:center; padding:2rem;}
+h1 { font-size:2rem; margin-bottom:1rem;}
+input { padding:0.6rem; width:60%; border:1px solid #ccc; border-radius:8px; margin-right:0.5rem;}
+button { padding:0.6rem 1rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer;}
+button:hover { background:#1d4ed8;}
+ul { list-style:none; padding:0; margin-top:2rem; display:flex; flex-direction:column; align-items:center; gap:1rem;}
+li { background:white; padding:1rem; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); width:80%; max-width:500px; display:flex; justify-content:space-between; align-items:center;}
+.question { flex-grow:1; text-align:left; }
+.vote-buttons { display:flex; gap:0.5rem; align-items:center; }
+.vote-buttons span { min-width:2rem; text-align:center; display:inline-block; }
+</style>
 </head>
 <body>
-  <h1>The Why Wall</h1>
-  <input id="questionInput" type="text" placeholder="Scrivi il tuo perché...">
-  <button onclick="addQuestion()">Aggiungi</button>
+<h1>The Why Wall</h1>
+<input id="questionInput" type="text" placeholder="Scrivi il tuo perché...">
+<button onclick="addQuestion()">Aggiungi</button>
 
-  <ul id="questionList"></ul>
+<ul id="questionList"></ul>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
-    import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
-    // Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyBLhUTg-Dnl_x2yMkYB5i4mC94axYT_kVM",
-      authDomain: "thewhywall-bd9a3.firebaseapp.com",
-      projectId: "thewhywall-bd9a3",
-      storageBucket: "thewhywall-bd9a3.firebasestorage.app",
-      messagingSenderId: "231142630619",
-      appId: "1:231142630619:web:d3853a9e043d029c9798fe",
-      measurementId: "G-T364DHHDC4"
-    };
+// Config Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyBLhUTg-Dnl_x2yMkYB5i4mC94axYT_kVM",
+  authDomain: "thewhywall-bd9a3.firebaseapp.com",
+  projectId: "thewhywall-bd9a3",
+  storageBucket: "thewhywall-bd9a3.firebasestorage.app",
+  messagingSenderId: "231142630619",
+  appId: "1:231142630619:web:d3853a9e043d029c9798fe",
+  measurementId: "G-T364DHHDC4"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-    const db = getFirestore(app);
-    const auth = getAuth();
-    let currentUserId = null;
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const db = getFirestore(app);
+const auth = getAuth();
+let currentUserId = null;
 
-    // Login anonimo
-    signInAnonymously(auth)
-      .then(userCredential => {
-        currentUserId = userCredential.user.uid;
-        loadQuestions();
-      })
-      .catch(console.error);
+// Login anonimo
+signInAnonymously(auth)
+  .then(userCredential => {
+    currentUserId = userCredential.user.uid;
+    loadQuestions();
+  })
+  .catch(console.error);
 
-    async function addQuestion() {
-      const questionText = document.getElementById("questionInput").value;
-      if (!questionText.trim()) return;
+// Aggiungi domanda
+window.addQuestion = async function() {
+  if (!currentUserId) {
+    alert("Attendi qualche secondo, stiamo preparando il tuo accesso anonimo...");
+    return;
+  }
 
-      await addDoc(collection(db, "questions"), { text: questionText, votes: {} });
-      document.getElementById("questionInput").value = "";
-      loadQuestions();
-    }
+  const questionText = document.getElementById("questionInput").value;
+  if (!questionText.trim()) return;
 
-    async function loadQuestions() {
-      const list = document.getElementById("questionList");
-      list.innerHTML = "";
+  await addDoc(collection(db, "questions"), { 
+    text: questionText, 
+    votes: {},    // inizializza oggetto vuoto per upvote
+    reports: {}   // inizializza oggetto vuoto per report
+  });
 
-      const querySnapshot = await getDocs(collection(db, "questions"));
-      let questions = [];
-      querySnapshot.forEach(docu => questions.push({ id: docu.id, ...docu.data() }));
+  document.getElementById("questionInput").value = "";
+  loadQuestions();
+}
 
-      // Calcola totale voti per ogni domanda
-      questions.forEach(q => {
-        q.totalVotes = 0;
-        for (const uid in q.votes) q.totalVotes += q.votes[uid];
-      });
+// Carica domande
+async function loadQuestions() {
+  const list = document.getElementById("questionList");
+  list.innerHTML = "";
 
-      // Ordina per voti totali
-      questions.sort((a,b) => b.totalVotes - a.totalVotes);
+  const querySnapshot = await getDocs(collection(db, "questions"));
+  let questions = [];
+  querySnapshot.forEach(docu => questions.push({ id: docu.id, ...docu.data() }));
 
-      questions.forEach(q => {
-        const li = document.createElement("li");
-        li.innerHTML = `
-          <span class="question">${q.text}</span>
-          <div class="vote-buttons">
-            <button onclick="upvote('${q.id}')">👍</button>
-            <span>${q.totalVotes}</span>
-            <button onclick="downvote('${q.id}')">👎</button>
-          </div>
-        `;
-        list.appendChild(li);
-      });
-    }
+  // Calcola totale voti e report
+  questions.forEach(q => {
+    q.totalVotes = q.votes ? Object.keys(q.votes).length : 0;
+    q.totalReports = q.reports ? Object.keys(q.reports).length : 0;
+  });
 
-    async function upvote(questionId) {
-      const ref = doc(db, "questions", questionId);
-      const docSnap = await getDoc(ref);
-      const data = docSnap.data();
-      const votes = data.votes || {};
-      if (votes[currentUserId] === 1) return;
-      votes[currentUserId] = 1;
-      await updateDoc(ref, { votes });
-      loadQuestions();
-    }
+  // Ordina per voti
+  questions.sort((a,b) => b.totalVotes - a.totalVotes);
 
-    async function downvote(questionId) {
-      const ref = doc(db, "questions", questionId);
-      const docSnap = await getDoc(ref);
-      const data = docSnap.data();
-      const votes = data.votes || {};
-      if (votes[currentUserId] === -1) return;
-      votes[currentUserId] = -1;
-      await updateDoc(ref, { votes });
-      loadQuestions();
-    }
+  questions.forEach(q => {
+    const userVoted = q.votes && q.votes[currentUserId];
+    const userReported = q.reports && q.reports[currentUserId];
 
-  </script>
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="question">${q.text}</span>
+      <div class="vote-buttons">
+        <button onclick="upvote('${q.id}')" ${userVoted ? 'disabled' : ''}>👍 ${q.totalVotes}</button>
+        <button onclick="report('${q.id}')" ${userReported ? 'disabled' : ''}>⚠️ ${q.totalReports}</button>
+      </div>
+    `;
+    list.appendChild(li);
+  });
+}
+
+// Upvote
+window.upvote = async function(questionId) {
+  const ref = doc(db, "questions", questionId);
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
+  const votes = data.votes || {};
+
+  if (votes[currentUserId]) return; // già votato
+  votes[currentUserId] = true;
+  await updateDoc(ref, { votes });
+  loadQuestions();
+}
+
+// Report
+window.report = async function(questionId) {
+  const ref = doc(db, "questions", questionId);
+  const docSnap = await getDoc(ref);
+  const data = docSnap.data();
+  const reports = data.reports || {};
+
+  if (reports[currentUserId]) return; // già segnalato
+  reports[currentUserId] = true;
+  await updateDoc(ref, { reports });
+  loadQuestions();
+}
+
+</script>
 </body>
 </html>
